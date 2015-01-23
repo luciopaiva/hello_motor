@@ -1,4 +1,7 @@
 
+import collections
+
+
 class DataContext():
 
     @staticmethod
@@ -8,10 +11,11 @@ class DataContext():
         return {'number': number}
 
     @staticmethod
-    def get_potato_bag(count: int=10) -> [dict]:
-        """ Returns a bag of potatoes.
+    def get_potato_bag(count: int=10) -> collections.Iterable:
+        """ Returns a generator of a bag of potatoes.
+            :rtype: collections.Iterable[dict]
         """
-        return [{'number': i} for i in range(count)]
+        return ({'number': i} for i in range(count))
 
 
 data_context = DataContext

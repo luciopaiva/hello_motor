@@ -61,7 +61,26 @@ class HelloMotor():
         self.ioloop.run_sync(insert)
         print('Stopped')
 
+    def bulk_insert_with_future_test(self):
+        @gen.coroutine
+        def bulk_insert():
+            print('Starting bulk async insert')
+            future = self.db.potato.insert(context.get_potato_bag())
+            """ :type: Future
+            """
+            yield future
+
+            print('Result: {}'.format(future.result()))
+            future = self.db.potato.count()
+            yield future
+
+            print('Potato count: {}'.format(future.result()))
+
+        self.ioloop.run_sync(bulk_insert)
+        print('Stopped')
+
 
 if __name__ == '__main__':
     # HelloMotor().insert_with_callback_test()
-    HelloMotor().insert_with_future_test()
+    # HelloMotor().insert_with_future_test()
+    HelloMotor().bulk_insert_with_future_test()
