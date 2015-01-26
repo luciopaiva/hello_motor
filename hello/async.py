@@ -1,3 +1,7 @@
+""" Simple Motor examples.
+
+    Reference: http://motor.readthedocs.org/en/latest/tutorial.html
+"""
 
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -111,6 +115,27 @@ class HelloMotor():
         self.ioloop.run_sync(find_some)
         print('Stopped')
 
+    def update_potatoes(self):
+        """ Update example.
+        """
+        @gen.coroutine
+        def update():
+            print('Starting update')
+            result = yield self.db.potato.update(
+                {'number': {'$gt': 8}},
+                {'$set': {'updated': True}},  # use $set to really update and not replace
+                multi=True)                   # do this for all potatoes that match
+            print(result)
+
+            cursor = self.db.potato.find({'updated': True})
+            """ :type: motor.MotorCursor
+            """
+            while (yield cursor.fetch_next):
+                potato = cursor.next_object()
+                print('Potato updated ({})'.format(potato))
+
+        self.ioloop.run_sync(update)
+        print('Stopped')
 
 
 if __name__ == '__main__':
@@ -119,4 +144,5 @@ if __name__ == '__main__':
     # HelloMotor().insert_with_future_test()
     # HelloMotor().bulk_insert_with_future_test()
     # hello.find_one_potato()
-    hello.find_some_potatoes()
+    # hello.find_some_potatoes()
+    hello.update_potatoes()
