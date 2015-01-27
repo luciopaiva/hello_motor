@@ -97,6 +97,26 @@ class HelloMotor():
         self.ioloop.run_sync(find_one)
         print('Stopped')
 
+    def find_another_potato(self):
+        """ Same test as find_one_potato(), but this test shows that it is necessary to annotate all methods down to
+            the innermost method that yields a Future.
+        """
+        @gen.coroutine
+        def find_another_inner():
+            print('Starting search for another potato')
+            document = yield self.db.potato.find_one({'number': 1})
+            print('A potato was found (id: {})'.format(document['_id']))
+
+        @gen.coroutine
+        def find_another():
+            """ Remove the coroutine annotation and the yield directive from this method to confirm that Tornado loses
+                the task and is unable to resume after the yield in find_another_inner().
+            """
+            yield find_another_inner()
+
+        self.ioloop.run_sync(find_another)
+        print('Stopped')
+
     def find_some_potatoes(self):
         """ Find example. Shows how to use count() too.
         """
@@ -159,7 +179,7 @@ if __name__ == '__main__':
     # HelloMotor().insert_with_callback_test()
     # HelloMotor().insert_with_future_test()
     # HelloMotor().bulk_insert_with_future_test()
-    # hello.find_one_potato()
+    hello.find_another_potato()
     # hello.find_some_potatoes()
     # hello.update_potatoes()
-    hello.remove_potatoes()
+    # hello.remove_potatoes()
