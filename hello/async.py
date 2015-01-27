@@ -19,7 +19,7 @@ class HelloMotor():
         """
 
         self.client = motor.MotorClient(database_host)
-        """ The client connection
+        """ The client connection.
             :type: motor.MotorClient
         """
         self.db = self.client['motor_test']
@@ -137,6 +137,22 @@ class HelloMotor():
         self.ioloop.run_sync(update)
         print('Stopped')
 
+    def remove_potatoes(self):
+        """ Remove example.
+        """
+        @gen.coroutine
+        def remove():
+            print('Inserting test documents')
+            potatoes_to_remove = yield self.db.potato.insert(context.get_potato_bag())
+            print('Done inserting')
+
+            print('Starting remove')
+            result = yield self.db.potato.remove({'_id': {'$in': potatoes_to_remove}})
+            print('Done removing')
+            print(result)
+
+        self.ioloop.run_sync(remove)
+        print('Stopped')
 
 if __name__ == '__main__':
     hello = HelloMotor()
@@ -145,4 +161,5 @@ if __name__ == '__main__':
     # HelloMotor().bulk_insert_with_future_test()
     # hello.find_one_potato()
     # hello.find_some_potatoes()
-    hello.update_potatoes()
+    # hello.update_potatoes()
+    hello.remove_potatoes()
