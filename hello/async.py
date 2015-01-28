@@ -135,6 +135,22 @@ class HelloMotor():
         self.ioloop.run_sync(find_some)
         print('Stopped')
 
+    def find_some_potatoes_with_generator(self):
+
+        def get_potatoes():
+            print('Starting search for some potatoes')
+            return self.db.potato.find({'number': {'$gt': 8}})
+
+        @gen.coroutine
+        def find_with_gen():
+            cursor = get_potatoes()
+            while (yield cursor.fetch_next):
+                potato = cursor.next_object()
+                print('A potato was found (id: {})'.format(potato['_id']))
+
+        self.ioloop.run_sync(find_with_gen)
+        print('Stopped')
+
     def update_potatoes(self):
         """ Update example.
         """
@@ -179,7 +195,8 @@ if __name__ == '__main__':
     # HelloMotor().insert_with_callback_test()
     # HelloMotor().insert_with_future_test()
     # HelloMotor().bulk_insert_with_future_test()
-    hello.find_another_potato()
+    # hello.find_another_potato()
     # hello.find_some_potatoes()
+    hello.find_some_potatoes_with_generator()
     # hello.update_potatoes()
     # hello.remove_potatoes()
