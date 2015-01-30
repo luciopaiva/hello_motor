@@ -138,15 +138,37 @@ class HelloMotor():
     def find_some_potatoes_with_generator(self):
 
         def get_potatoes():
+
+            class MyCursor:
+                def __init__(self, cursor):
+                    self.cursor = cursor
+
+                def __iter__(self):
+                    return self
+
+                @gen.coroutine
+                def __next__(self):
+                    if (yield self.cursor.fetch_next):
+                        return self.cursor.next_object()
+                    else:
+                        raise StopIteration
+
             print('Starting search for some potatoes')
-            return self.db.potato.find({'number': {'$gt': 8}})
+            return MyCursor(self.db.potato.find({'number': {'$gt': 8}}))
 
         @gen.coroutine
         def find_with_gen():
+            # for potato in get_potatoes():
+            #     print('A potato was found (id: {})'.format(potato['_id']))
+
             cursor = get_potatoes()
-            while (yield cursor.fetch_next):
-                potato = cursor.next_object()
+
+            for potato in (yield cursor):
                 print('A potato was found (id: {})'.format(potato['_id']))
+
+            # while (yield cursor.fetch_next):
+            #     potato = cursor.next_object()
+            #     print('A potato was found (id: {})'.format(potato['_id']))
 
         self.ioloop.run_sync(find_with_gen)
         print('Stopped')
