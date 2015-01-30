@@ -139,36 +139,117 @@ class HelloMotor():
 
         def get_potatoes():
 
-            class MyCursor:
+            class CursorProxy():
+                import collections
+
+                class FutureIterator(collections.Iterable):
+
+                    def __init__(self, cursor):
+                        self.cursor = cursor
+
+                    def __iter__(self):
+                        return self
+
+                    def __next__(self):
+                        return next(self.cursor.delegate)
+
                 def __init__(self, cursor):
                     self.cursor = cursor
+                    self.iterator = CursorProxy.FutureIterator(self.cursor)
 
-                def __iter__(self):
-                    return self
+                def __getattr__(self, name):
+                    return getattr(self.cursor, name)
 
-                @gen.coroutine
-                def __next__(self):
-                    if (yield self.cursor.fetch_next):
-                        return self.cursor.next_object()
+                def fetch_object(self):
+                    future = Future()
+                    iterator = self.iterator
+
+                    if not self.cursor._buffer_size() and self.cursor.alive:
+                        if self.cursor._empty():
+                            # Special case, limit of 0
+                            # future.set_result(False)
+                            future.set_exception(StopIteration())
+                            return future
+
+                        def cb(batch_size, error):
+                            if error:
+                                future.set_exception(error)
+                            else:
+                                future.set_result(iterator)
+
+                        self.cursor._get_more(cb)
+                        return future
+                    elif self.cursor._buffer_size():
+                        future.set_result(iterator)
+                        return future
                     else:
-                        raise StopIteration
+                        # Dead
+                        # future.set_result(False)
+                        future.set_exception(StopIteration())
+                    return future
+
+            class MyNewCursor(motor.MotorCursor):
+
+                def __init__(self, cursor, collection):
+                    super().__init__(cursor, collection)
+
+                def fetch_object(self):
+                    future = Future()
+
+                    if not self._buffer_size() and self.alive:
+                        if self._empty():
+                            # Special case, limit of 0
+                            # future.set_result(False)
+                            future.set_exception(StopIteration())
+                            return future
+
+                        def cb(batch_size, error):
+                            if error:
+                                future.set_exception(error)
+                            else:
+                                future.set_result(next(self.delegate))
+
+                        self._get_more(cb)
+                        return future
+                    elif self._buffer_size():
+                        future.set_result(next(self.delegate))
+                        return future
+                    else:
+                        # Dead
+                        # future.set_result(False)
+                        future.set_exception(StopIteration())
+                    return future
+
+            # class MyCursor:
+            #     def __init__(self, cursor):
+            #         self.cursor = cursor
+            #
+            #     def __iter__(self):
+            #         return self
+            #
+            #     @gen.coroutine
+            #     def __next__(self):
+            #         if (yield self.cursor.fetch_next):
+            #             return self.cursor.next_object()
+            #         else:
+            #             raise StopIteration
 
             print('Starting search for some potatoes')
-            return MyCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            # return self.db.potato.find({'number': {'$gt': 8}})
+            return CursorProxy(self.db.potato.find({'number': {'$gt': 8}}))
 
         @gen.coroutine
         def find_with_gen():
-            # for potato in get_potatoes():
-            #     print('A potato was found (id: {})'.format(potato['_id']))
 
             cursor = get_potatoes()
 
-            for potato in (yield cursor):
-                print('A potato was found (id: {})'.format(potato['_id']))
+            for potato in (yield cursor.fetch_object()):
+                print('> {}'.format(potato))
 
             # while (yield cursor.fetch_next):
             #     potato = cursor.next_object()
-            #     print('A potato was found (id: {})'.format(potato['_id']))
+            #     print('> {}'.format(potato))
+            #     # print('A potato was found (id: {})'.format(potato['_id']))
 
         self.ioloop.run_sync(find_with_gen)
         print('Stopped')
