@@ -137,37 +137,47 @@ class HelloMotor():
 
     def find_some_potatoes_with_generator(self):
 
+        # @gen.coroutine
         def get_potatoes():
+            import collections
+
+            class CursorIterable(collections.Iterable):
+
+                def __init__(self, _cursor):
+                    self.cursor = _cursor
+
+                def __iter__(self):
+                    return self
+
+                def send(self, value):
+                    print('From inside send(): {}'.format(value))
+                    # return value
+                    return self.__next__()
+
+                def __next__(self):
+                    return self.cursor.fetch_object()
 
             class CursorProxy():
-                import collections
 
-                class CursorIterable(collections.Iterable):
-
-                    def __init__(self, cursor):
-                        self.cursor = cursor
-
-                    def __iter__(self):
-                        return self
-
-                    def __next__(self):
-                        return next(self.cursor.delegate)
-
-                def __init__(self, cursor):
-                    self.cursor = cursor
-                    self.iterator = CursorProxy.CursorIterable(self.cursor)
+                def __init__(self, motor_cursor: motor.MotorCursor):
+                    self.cursor = motor_cursor
 
                 def __getattr__(self, name):
+                    """ Proxy MotorCursor attributes.
+                    """
                     return getattr(self.cursor, name)
 
                 def fetch_object(self):
+                    """ A mix of MotorCursor.fetch_next with MotorCursor.next_object.
+
+                        Returns a Future as MotorCursor.fetch_next, but instead of returning True, returns the next
+                        document already. If False, raises StopIteration instead.
+                    """
                     future = Future()
-                    iterator = self.iterator
 
                     if not self.cursor._buffer_size() and self.cursor.alive:
                         if self.cursor._empty():
                             # Special case, limit of 0
-                            # future.set_result(False)
                             future.set_exception(StopIteration())
                             return future
 
@@ -175,16 +185,15 @@ class HelloMotor():
                             if error:
                                 future.set_exception(error)
                             else:
-                                future.set_result(iterator)
+                                future.set_result(next(self.cursor.delegate))
 
                         self.cursor._get_more(cb)
                         return future
                     elif self.cursor._buffer_size():
-                        future.set_result(iterator)
+                        future.set_result(next(self.cursor.delegate))
                         return future
                     else:
                         # Dead
-                        # future.set_result(False)
                         future.set_exception(StopIteration())
                     return future
 
@@ -193,14 +202,27 @@ class HelloMotor():
 
             cursor = CursorProxy(self.db.potato.find({'number': {'$gt': 8}}))
 
-            while True:
-                yield cursor.fetch_object()
+            iterable = CursorIterable(cursor)
+            return iterable
+            # while True:
+            #     yield cursor.fetch_next
+            #     # yield cursor.fetch_object()
 
         @gen.coroutine
         def find_with_gen():
 
-            for potato in (yield next(get_potatoes())):
+            # for potato in ((yield p) for p in get_potatoes()):
+            #     print('> {}'.format(potato))
+
+            # Does not work! ``yield from`` only returns a value after the generator raises a StopIteration.
+            # You could say: "Nice! Throw a StopIteration for each document", but it won't work because get_potatoes()
+            # will not retain state from the previous run. That same first document will be fetched all over again in
+            # an endless loop.
+            for potato in (yield from get_potatoes()):
                 print('> {}'.format(potato))
+
+            # for potato in (yield next(get_potatoes())):
+            #     print('> {}'.format(potato))
 
             # cursor = get_potatoes()
             # for potato in (yield cursor.fetch_object()):
