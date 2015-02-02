@@ -3,6 +3,8 @@
     Reference: http://motor.readthedocs.org/en/latest/tutorial.html
 """
 
+import collections
+
 from tornado.ioloop import IOLoop
 from tornado import gen
 from tornado.concurrent import Future
@@ -136,80 +138,73 @@ class HelloMotor():
         print('Stopped')
 
     def find_some_potatoes_with_generator(self):
+        """ A better approach to iterating over Motor's cursor.
 
-        def get_potatoes():
+            Compare it to the ``find_some_potatoes()`` test.
+        """
 
-            class CursorProxy():
-                import collections
+        class SmartCursor(collections.Iterable):
+            """ Encapsulate Motor's cursor to add functionality to it.
+                This proxy can return a Future to a document, what Motor's original cursor isn't capable of doing.
+            """
 
-                class CursorIterable(collections.Iterable):
+            def __init__(self, motor_cursor):
+                self.motor_cursor = motor_cursor
+                # Uncomment to test batch_size:
+                # self.motor_cursor.batch_size(10)
 
-                    def __init__(self, cursor):
-                        self.cursor = cursor
+            def __getattr__(self, name):
+                """ Proxy everything else to Motor's cursor.
+                """
+                return getattr(self.motor_cursor, name)
 
-                    def __iter__(self):
-                        return self
+            def fetch_object(self):
+                """ Returns a Future to a document or raises StopInteraction if the cursor is exhausted.
+                """
+                future = Future()
 
-                    def __next__(self):
-                        return next(self.cursor.delegate)
-
-                def __init__(self, cursor):
-                    self.cursor = cursor
-                    self.iterator = CursorProxy.CursorIterable(self.cursor)
-
-                def __getattr__(self, name):
-                    return getattr(self.cursor, name)
-
-                def fetch_object(self):
-                    future = Future()
-                    iterator = self.iterator
-
-                    if not self.cursor._buffer_size() and self.cursor.alive:
-                        if self.cursor._empty():
-                            # Special case, limit of 0
-                            # future.set_result(False)
-                            future.set_exception(StopIteration())
-                            return future
-
-                        def cb(batch_size, error):
-                            if error:
-                                future.set_exception(error)
-                            else:
-                                future.set_result(iterator)
-
-                        self.cursor._get_more(cb)
-                        return future
-                    elif self.cursor._buffer_size():
-                        future.set_result(iterator)
-                        return future
-                    else:
-                        # Dead
+                if not self.motor_cursor._buffer_size() and self.motor_cursor.alive:
+                    if self.motor_cursor._empty():
+                        # Special case, limit of 0
                         # future.set_result(False)
                         future.set_exception(StopIteration())
+                        return future
+
+                    def cb(batch_size, error):
+                        if batch_size == 0:
+                            future.set_exception(StopIteration())
+                        elif error:
+                            future.set_exception(error)
+                        else:
+                            future.set_result(next(self.motor_cursor.delegate))
+
+                    self.motor_cursor._get_more(cb)
                     return future
+                elif self.motor_cursor._buffer_size():
+                    future.set_result(next(self.motor_cursor.delegate))
+                    return future
+                else:
+                    # Dead
+                    # future.set_result(False)
+                    future.set_exception(StopIteration())
+                return future
 
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                return self.fetch_object()
+
+        def get_potatoes():
             print('Starting search for some potatoes')
-            # return self.db.potato.find({'number': {'$gt': 8}})
-
-            cursor = CursorProxy(self.db.potato.find({'number': {'$gt': 8}}))
-
-            while True:
-                yield cursor.fetch_object()
+            return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
 
         @gen.coroutine
         def find_with_gen():
 
-            for potato in (yield next(get_potatoes())):
+            for future in get_potatoes():
+                potato = yield future
                 print('> {}'.format(potato))
-
-            # cursor = get_potatoes()
-            # for potato in (yield cursor.fetch_object()):
-            #     print('> {}'.format(potato))
-
-            # while (yield cursor.fetch_next):
-            #     potato = cursor.next_object()
-            #     print('> {}'.format(potato))
-            #     # print('A potato was found (id: {})'.format(potato['_id']))
 
         self.ioloop.run_sync(find_with_gen)
         print('Stopped')
