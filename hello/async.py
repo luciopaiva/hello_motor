@@ -150,6 +150,7 @@ class HelloMotor():
 
             def __init__(self, motor_cursor):
                 self.motor_cursor = motor_cursor
+                self.map_chain = []
                 # Uncomment to test batch_size:
                 # self.motor_cursor.batch_size(10)
 
@@ -161,6 +162,12 @@ class HelloMotor():
             def fetch_object(self):
                 """ Returns a Future to a document or raises StopInteraction if the cursor is exhausted.
                 """
+                def process_next():
+                    doc = next(self.motor_cursor.delegate)
+                    for method in self.map_chain:
+                        doc = method(doc)
+                    return doc
+
                 future = Future()
 
                 if not self.motor_cursor._buffer_size() and self.motor_cursor.alive:
@@ -176,12 +183,12 @@ class HelloMotor():
                         elif error:
                             future.set_exception(error)
                         else:
-                            future.set_result(next(self.motor_cursor.delegate))
+                            future.set_result(process_next())
 
                     self.motor_cursor._get_more(cb)
                     return future
                 elif self.motor_cursor._buffer_size():
-                    future.set_result(next(self.motor_cursor.delegate))
+                    future.set_result(process_next())
                     return future
                 else:
                     # Dead
@@ -195,9 +202,15 @@ class HelloMotor():
             def __next__(self):
                 return self.fetch_object()
 
+            def map(self, method):
+                self.map_chain.append(method)
+                return self
+
         def get_potatoes():
             print('Starting search for some potatoes')
-            return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))\
+                .map(lambda potato: potato['number'])\
+                .map(lambda number: number + 1)
 
         @gen.coroutine
         def find_with_gen():
