@@ -148,9 +148,10 @@ class HelloMotor():
                 This proxy can return a Future to a document, what Motor's original cursor isn't capable of doing.
             """
 
-            def __init__(self, motor_cursor):
+            def __init__(self, motor_cursor, callback):
                 self.motor_cursor = motor_cursor
                 self.map_chain = []
+                self.callback = callback
                 # Uncomment to test batch_size:
                 # self.motor_cursor.batch_size(10)
 
@@ -202,6 +203,11 @@ class HelloMotor():
             def __next__(self):
                 return self.fetch_object()
 
+            def send(self, value):
+                if self.callback is not None:
+                    self.callback(value)
+                return next(self)
+
             def map(self, method):
                 self.map_chain.append(method)
                 return self
@@ -212,6 +218,10 @@ class HelloMotor():
                 .map(lambda potato: potato['number'])\
                 .map(lambda number: number + 1)
 
+        def get_potatoes_with_callback(callback):
+            print('Starting search for some potatoes')
+            return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}), callback)
+
         @gen.coroutine
         def find_with_gen():
 
@@ -219,7 +229,15 @@ class HelloMotor():
                 potato = yield future
                 print('> {}'.format(potato))
 
-        self.ioloop.run_sync(find_with_gen)
+        @gen.coroutine
+        def find_with_yield_from():
+            def on_document(potato):
+                print('> {}'.format(potato))
+
+            yield from get_potatoes_with_callback(on_document)
+
+        # self.ioloop.run_sync(find_with_gen)
+        self.ioloop.run_sync(find_with_yield_from)
         print('Stopped')
 
     def update_potatoes(self):
