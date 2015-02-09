@@ -239,6 +239,14 @@ class HelloMotor():
             print('Should print this line after iterating')
 
         @gen.coroutine
+        def find_to_list():
+            print('Should print this line before yielding')
+            potatoes = yield get_potatoes().to_list(None)
+            print('Should print this line after yielding')
+            for potato in potatoes:
+                print('> {}'.format(potato))
+
+        @gen.coroutine
         def find_with_yield_from():
             def on_document(potato):
                 print('> {}'.format(potato))
@@ -248,7 +256,8 @@ class HelloMotor():
             print('Should print this line after yielding')
 
         # self.ioloop.run_sync(find_with_gen)
-        self.ioloop.run_sync(find_with_yield_from)
+        # self.ioloop.run_sync(find_with_yield_from)
+        self.ioloop.run_sync(find_to_list)
         print('Stopped')
 
     def update_potatoes(self):
