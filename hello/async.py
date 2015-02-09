@@ -82,9 +82,13 @@ class SmartCursor(collections.Iterable):
     def throw(self, exc_type, value, traceback):
         raise exc_type(value)
 
+    def to_list(self, length=None, callback=None):
+        return self.motor_cursor.to_list(length=length, callback=callback)
+
     def map(self, method):
         self.map_chain.append(method)
         return self
+
 
 class HelloMotor():
 
@@ -260,7 +264,7 @@ class HelloMotor():
                 .map(lambda number: number + 1)
 
             print('Should print this line before yielding')
-            potatoes = yield cursor.to_list(None)
+            potatoes = yield cursor.to_list()
             print('Should print this line after yielding')
 
             for potato in potatoes:
