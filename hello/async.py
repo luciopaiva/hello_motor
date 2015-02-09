@@ -148,7 +148,7 @@ class HelloMotor():
                 This proxy can return a Future to a document, what Motor's original cursor isn't capable of doing.
             """
 
-            def __init__(self, motor_cursor, callback):
+            def __init__(self, motor_cursor, callback=None):
                 self.motor_cursor = motor_cursor
                 self.map_chain = []
                 self.callback = callback
@@ -208,6 +208,9 @@ class HelloMotor():
                     self.callback(value)
                 return next(self)
 
+            def throw(self, type, value, traceback):
+                raise type(value)
+
             def map(self, method):
                 self.map_chain.append(method)
                 return self
@@ -225,16 +228,24 @@ class HelloMotor():
         @gen.coroutine
         def find_with_gen():
 
-            for future in get_potatoes():
-                potato = yield future
-                print('> {}'.format(potato))
+            print('Should print this line before iterating')
+
+            try:
+                for future in get_potatoes():
+                    potato = yield future
+                    print('> {}'.format(potato))
+            except StopIteration:
+                print('StopIteration was raised')
+            print('Should print this line after iterating')
 
         @gen.coroutine
         def find_with_yield_from():
             def on_document(potato):
                 print('> {}'.format(potato))
 
+            print('Should print this line before yielding')
             yield from get_potatoes_with_callback(on_document)
+            print('Should print this line after yielding')
 
         # self.ioloop.run_sync(find_with_gen)
         self.ioloop.run_sync(find_with_yield_from)
