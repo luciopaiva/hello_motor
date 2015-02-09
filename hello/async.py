@@ -14,6 +14,78 @@ from hello import database_host
 from hello.data.context import data_context as context
 
 
+class SmartCursor(collections.Iterable):
+    """ Encapsulate Motor's cursor to add functionality to it.
+        This proxy can return a Future to a document, what Motor's original cursor isn't capable of doing.
+    """
+
+    def __init__(self, motor_cursor, callback=None):
+        self.motor_cursor = motor_cursor
+        self.map_chain = []
+        self.callback = callback
+        # Uncomment to test batch_size:
+        # self.motor_cursor.batch_size(10)
+
+    def __getattr__(self, name):
+        """ Proxy everything else to Motor's cursor.
+        """
+        return getattr(self.motor_cursor, name)
+
+    def fetch_object(self):
+        """ Returns a Future to a document or raises StopInteraction if the cursor is exhausted.
+        """
+        def process_next():
+            doc = next(self.motor_cursor.delegate)
+            for method in self.map_chain:
+                doc = method(doc)
+            return doc
+
+        future = Future()
+
+        if not self.motor_cursor._buffer_size() and self.motor_cursor.alive:
+            if self.motor_cursor._empty():
+                # Special case, limit of 0
+                # future.set_result(False)
+                future.set_exception(StopIteration())
+                return future
+
+            def cb(batch_size, error):
+                if batch_size == 0:
+                    future.set_exception(StopIteration())
+                elif error:
+                    future.set_exception(error)
+                else:
+                    future.set_result(process_next())
+
+            self.motor_cursor._get_more(cb)
+            return future
+        elif self.motor_cursor._buffer_size():
+            future.set_result(process_next())
+            return future
+        else:
+            # Dead
+            # future.set_result(False)
+            future.set_exception(StopIteration())
+        return future
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.fetch_object()
+
+    def send(self, value):
+        if self.callback is not None:
+            self.callback(value)
+        return next(self)
+
+    def throw(self, exc_type, value, traceback):
+        raise exc_type(value)
+
+    def map(self, method):
+        self.map_chain.append(method)
+        return self
+
 class HelloMotor():
 
     def __init__(self):
@@ -138,92 +210,17 @@ class HelloMotor():
         print('Stopped')
 
     def find_some_potatoes_with_generator(self):
-        """ A better approach to iterating over Motor's cursor.
+        """ I thought this was a good approach, but it throws when the last Future is yielded without a document to
+            fetch.
 
             Compare it to the ``find_some_potatoes()`` test.
         """
-
-        class SmartCursor(collections.Iterable):
-            """ Encapsulate Motor's cursor to add functionality to it.
-                This proxy can return a Future to a document, what Motor's original cursor isn't capable of doing.
-            """
-
-            def __init__(self, motor_cursor, callback=None):
-                self.motor_cursor = motor_cursor
-                self.map_chain = []
-                self.callback = callback
-                # Uncomment to test batch_size:
-                # self.motor_cursor.batch_size(10)
-
-            def __getattr__(self, name):
-                """ Proxy everything else to Motor's cursor.
-                """
-                return getattr(self.motor_cursor, name)
-
-            def fetch_object(self):
-                """ Returns a Future to a document or raises StopInteraction if the cursor is exhausted.
-                """
-                def process_next():
-                    doc = next(self.motor_cursor.delegate)
-                    for method in self.map_chain:
-                        doc = method(doc)
-                    return doc
-
-                future = Future()
-
-                if not self.motor_cursor._buffer_size() and self.motor_cursor.alive:
-                    if self.motor_cursor._empty():
-                        # Special case, limit of 0
-                        # future.set_result(False)
-                        future.set_exception(StopIteration())
-                        return future
-
-                    def cb(batch_size, error):
-                        if batch_size == 0:
-                            future.set_exception(StopIteration())
-                        elif error:
-                            future.set_exception(error)
-                        else:
-                            future.set_result(process_next())
-
-                    self.motor_cursor._get_more(cb)
-                    return future
-                elif self.motor_cursor._buffer_size():
-                    future.set_result(process_next())
-                    return future
-                else:
-                    # Dead
-                    # future.set_result(False)
-                    future.set_exception(StopIteration())
-                return future
-
-            def __iter__(self):
-                return self
-
-            def __next__(self):
-                return self.fetch_object()
-
-            def send(self, value):
-                if self.callback is not None:
-                    self.callback(value)
-                return next(self)
-
-            def throw(self, type, value, traceback):
-                raise type(value)
-
-            def map(self, method):
-                self.map_chain.append(method)
-                return self
 
         def get_potatoes():
             print('Starting search for some potatoes')
             return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))\
                 .map(lambda potato: potato['number'])\
                 .map(lambda number: number + 1)
-
-        def get_potatoes_with_callback(callback):
-            print('Starting search for some potatoes')
-            return SmartCursor(self.db.potato.find({'number': {'$gt': 8}}), callback)
 
         @gen.coroutine
         def find_with_gen():
@@ -238,25 +235,37 @@ class HelloMotor():
                 print('StopIteration was raised')
             print('Should print this line after iterating')
 
-        @gen.coroutine
-        def find_to_list():
-            print('Should print this line before yielding')
-            potatoes = yield get_potatoes().to_list(None)
-            print('Should print this line after yielding')
-            for potato in potatoes:
-                print('> {}'.format(potato))
+        self.ioloop.run_sync(find_with_gen)
+        print('Stopped')
 
+    def find_some_potatoes_with_yield_from(self):
         @gen.coroutine
         def find_with_yield_from():
             def on_document(potato):
                 print('> {}'.format(potato))
 
             print('Should print this line before yielding')
-            yield from get_potatoes_with_callback(on_document)
+            yield from SmartCursor(self.db.potato.find({'number': {'$gt': 8}}), on_document)
             print('Should print this line after yielding')
 
-        # self.ioloop.run_sync(find_with_gen)
-        # self.ioloop.run_sync(find_with_yield_from)
+        self.ioloop.run_sync(find_with_yield_from)
+        print('Stopped')
+
+    def find_some_potatoes_to_list(self):
+        @gen.coroutine
+        def find_to_list():
+
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))\
+                .map(lambda pot: pot['number'])\
+                .map(lambda number: number + 1)
+
+            print('Should print this line before yielding')
+            potatoes = yield cursor.to_list(None)
+            print('Should print this line after yielding')
+
+            for potato in potatoes:
+                print('> {}'.format(potato))
+
         self.ioloop.run_sync(find_to_list)
         print('Stopped')
 
@@ -306,6 +315,8 @@ if __name__ == '__main__':
     # HelloMotor().bulk_insert_with_future_test()
     # hello.find_another_potato()
     # hello.find_some_potatoes()
-    hello.find_some_potatoes_with_generator()
+    # hello.find_some_potatoes_with_generator()
+    # hello.find_some_potatoes_with_yield_from()
+    hello.find_some_potatoes_to_list()
     # hello.update_potatoes()
     # hello.remove_potatoes()
