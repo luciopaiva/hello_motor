@@ -83,6 +83,9 @@ class SmartCursor(collections.Iterable):
         raise exc_type(value)
 
     def to_list(self, length=None, callback=None):
+        """ MotorCursor.to_list() requires you to pass length even if you want to pass None. This proxy method just
+            sets length to None by default, so you may call cursor.to_list() instead of cursor.to_list(None).
+        """
         return self.motor_cursor.to_list(length=length, callback=callback)
 
     def map(self, method):
