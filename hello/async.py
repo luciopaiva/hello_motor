@@ -22,7 +22,7 @@ class SmartCursor(collections.Iterable):
     def __init__(self, motor_cursor, callback=None):
         self.motor_cursor = motor_cursor
         self.map_chain = []
-        self.callback = callback
+        self.callbacks = [callback] if callable(callback) else []
         # Uncomment to test batch_size:
         # self.motor_cursor.batch_size(10)
 
@@ -76,9 +76,14 @@ class SmartCursor(collections.Iterable):
     def __next__(self):
         return self.fetch_object()
 
+    def add_callback(self, callback):
+        if callable(callback):
+            self.callbacks.append(callback)
+        return self
+
     def send(self, value):
-        if self.callback is not None:
-            self.callback(value)
+        for callback in self.callbacks:
+            callback(value)
         return next(self)
 
     def throw(self, exc_type, value, traceback):
@@ -267,6 +272,26 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_yield_from)
         print('Stopped')
 
+    def test_find_some_potatoes_with_yield_from_multiple_callbacks(self):
+        @gen.coroutine
+        def find_with_yield_from():
+            def on_document(potato):
+                print('{}'.format(potato), end='')
+
+            print('Should print this line before yielding')
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            cursor.map(lambda doc: doc['_id'])\
+                .add_callback(lambda doc: print('(BEFORE) ', end=''))\
+                .add_callback(on_document)\
+                .add_callback(lambda doc: print(' (AFTER)'))
+            yield from cursor
+
+            print('Should print this line after yielding')
+
+        print('start')
+        self.ioloop.run_sync(find_with_yield_from)
+        print('Stopped')
+
     def test_find_some_potatoes_to_list(self):
         @gen.coroutine
         def find_to_list():
@@ -352,4 +377,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_find_some_potatoes_with_while()
+    HelloMotor().test_find_some_potatoes_with_yield_from_multiple_callbacks()
