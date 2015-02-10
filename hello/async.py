@@ -325,6 +325,25 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_while)
         print('Stopped')
 
+    def test_find_some_potatoes_with_count_before(self):
+        @gen.coroutine
+        def find_with_while():
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            cursor.batch_size(1)
+            print('{} documents'.format((yield cursor.count())))
+            print('Should print this line before while')
+            i = 0
+            while (yield cursor.has_next()):
+                potato = cursor.get_next()
+                if potato is None:
+                    break
+                i += 1
+                print('>{:2} {}'.format(i, potato))
+            print('Should print this line after while')
+
+        self.ioloop.run_sync(find_with_while)
+        print('Stopped')
+
     def test_update_potatoes(self):
         """ Update example.
         """
@@ -379,4 +398,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_find_some_potatoes_to_list()
+    HelloMotor().test_find_some_potatoes_with_count_before()
