@@ -55,7 +55,8 @@ class SmartCursor(collections.Iterable):
                 elif error:
                     future.set_exception(error)
                 else:
-                    future.set_result(process_next())
+                    document = next(self.motor_cursor.delegate)
+                    future.set_result(self._post_process(document))
 
             self.motor_cursor._get_more(cb)
             return future
