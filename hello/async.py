@@ -89,11 +89,13 @@ class SmartCursor(collections.Iterable):
     def throw(self, exc_type, value, traceback):
         raise exc_type(value)
 
+    @gen.coroutine
     def to_list(self, length=None, callback=None):
         """ MotorCursor.to_list() requires you to pass length even if you want to pass None. This proxy method just
             sets length to None by default, so you may call cursor.to_list() instead of cursor.to_list(None).
         """
-        return self.motor_cursor.to_list(length=length, callback=callback)
+        documents = yield self.motor_cursor.to_list(length=length, callback=callback)
+        return (self._post_process(doc) for doc in documents)
 
     def map(self, method):
         self.map_chain.append(method)
@@ -300,9 +302,9 @@ class HelloMotor():
                 .map(lambda pot: pot['number'])\
                 .map(lambda number: number + 1)
 
-            print('Should print this line before yielding')
+            print('Should print this line before to_list()')
             potatoes = yield cursor.to_list()
-            print('Should print this line after yielding')
+            print('Should print this line after to_list()')
 
             for potato in potatoes:
                 print('> {}'.format(potato))
@@ -377,4 +379,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_find_some_potatoes_with_yield_from_multiple_callbacks()
+    HelloMotor().test_find_some_potatoes_to_list()
