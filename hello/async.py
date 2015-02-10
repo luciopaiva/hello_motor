@@ -31,15 +31,15 @@ class SmartCursor(collections.Iterable):
         """
         return getattr(self.motor_cursor, name)
 
+    def _post_process(self, document):
+        if document is not None:
+            for method in self.map_chain:
+                document = method(document)
+        return document
+
     def fetch_object(self):
         """ Returns a Future to a document or raises StopInteraction if the cursor is exhausted.
         """
-        def process_next():
-            doc = next(self.motor_cursor.delegate)
-            for method in self.map_chain:
-                doc = method(doc)
-            return doc
-
         future = Future()
 
         if not self.motor_cursor._buffer_size() and self.motor_cursor.alive:
@@ -60,7 +60,8 @@ class SmartCursor(collections.Iterable):
             self.motor_cursor._get_more(cb)
             return future
         elif self.motor_cursor._buffer_size():
-            future.set_result(process_next())
+            document = next(self.motor_cursor.delegate)
+            future.set_result(self._post_process(document))
             return future
         else:
             # Dead
@@ -96,7 +97,8 @@ class SmartCursor(collections.Iterable):
         return self.motor_cursor.fetch_next
 
     def get_next(self):
-        return self.motor_cursor.next_object()
+        document = self.motor_cursor.next_object()
+        return self._post_process(document)
 
 
 class HelloMotor():
