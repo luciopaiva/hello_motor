@@ -120,7 +120,7 @@ class HelloMotor():
         """ :type: IOLoop
         """
 
-    def insert_with_callback_test(self):
+    def test_insert_with_callback_test(self):
         """ The most basic example I could figure out.
             Note that it is important to start an IOLoop, otherwise the callback will never be called. Motor is
             certainly depending on Tornardo's loop to run.
@@ -139,7 +139,7 @@ class HelloMotor():
         self.ioloop.start()
         print('Stopped')
 
-    def insert_with_future_test(self):
+    def test_insert_with_future_test(self):
         """ Simple example using Future instead of passing a callback.
             Again, it is important to start an IOLoop.
         """
@@ -155,7 +155,7 @@ class HelloMotor():
         self.ioloop.run_sync(insert)
         print('Stopped')
 
-    def bulk_insert_with_future_test(self):
+    def test_bulk_insert_with_future_test(self):
         """ Bulk insert example.
         """
         @gen.coroutine
@@ -175,7 +175,7 @@ class HelloMotor():
         self.ioloop.run_sync(bulk_insert)
         print('Stopped')
 
-    def find_one_potato(self):
+    def test_find_one_potato(self):
         """ Find One example.
         """
         @gen.coroutine
@@ -187,7 +187,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_one)
         print('Stopped')
 
-    def find_another_potato(self):
+    def test_find_another_potato(self):
         """ Same test as find_one_potato(), but this test shows that it is necessary to annotate all methods down to
             the innermost method that yields a Future.
         """
@@ -207,7 +207,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_another)
         print('Stopped')
 
-    def find_some_potatoes(self):
+    def test_find_some_potatoes(self):
         """ Find example. Shows how to use count() too.
         """
         @gen.coroutine
@@ -225,7 +225,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_some)
         print('Stopped')
 
-    def find_some_potatoes_with_generator(self):
+    def test_find_some_potatoes_with_generator(self):
         """ I thought this was a good approach, but it throws when the last Future is yielded without a document to
             fetch.
 
@@ -254,7 +254,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_gen)
         print('Stopped')
 
-    def find_some_potatoes_with_yield_from(self):
+    def test_find_some_potatoes_with_yield_from(self):
         @gen.coroutine
         def find_with_yield_from():
             def on_document(potato):
@@ -267,7 +267,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_yield_from)
         print('Stopped')
 
-    def find_some_potatoes_to_list(self):
+    def test_find_some_potatoes_to_list(self):
         @gen.coroutine
         def find_to_list():
 
@@ -285,7 +285,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_to_list)
         print('Stopped')
 
-    def find_some_potatoes_with_while(self):
+    def test_find_some_potatoes_with_while(self):
         @gen.coroutine
         def find_with_while():
             cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
@@ -298,7 +298,7 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_while)
         print('Stopped')
 
-    def update_potatoes(self):
+    def test_update_potatoes(self):
         """ Update example.
         """
         @gen.coroutine
@@ -320,7 +320,7 @@ class HelloMotor():
         self.ioloop.run_sync(update)
         print('Stopped')
 
-    def remove_potatoes(self):
+    def test_remove_potatoes(self):
         """ Remove example.
         """
         @gen.coroutine
@@ -337,16 +337,19 @@ class HelloMotor():
         self.ioloop.run_sync(remove)
         print('Stopped')
 
+
+def get_testable_methods(obj):
+    for m in (m for m in dir(obj) if callable(getattr(obj, m)) and m.startswith('test')):
+        yield getattr(obj, m)
+
+
+def test_all(obj):
+    for method in get_testable_methods(obj):
+        print('-' * 80)
+        print(method.__name__)
+        print('-' * 80)
+        method()
+
 if __name__ == '__main__':
-    hello = HelloMotor()
-    # HelloMotor().insert_with_callback_test()
-    # HelloMotor().insert_with_future_test()
-    # HelloMotor().bulk_insert_with_future_test()
-    # hello.find_another_potato()
-    # hello.find_some_potatoes()
-    # hello.find_some_potatoes_with_generator()
-    # hello.find_some_potatoes_with_yield_from()
-    # hello.find_some_potatoes_to_list()
-    hello.find_some_potatoes_with_while()
-    # hello.update_potatoes()
-    # hello.remove_potatoes()
+    # test_all(HelloMotor())
+    HelloMotor().test_find_some_potatoes_with_while()
