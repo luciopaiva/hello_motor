@@ -92,6 +92,12 @@ class SmartCursor(collections.Iterable):
         self.map_chain.append(method)
         return self
 
+    def has_next(self):
+        return self.motor_cursor.fetch_next
+
+    def get_next(self):
+        return self.motor_cursor.next_object()
+
 
 class HelloMotor():
 
@@ -276,6 +282,19 @@ class HelloMotor():
         self.ioloop.run_sync(find_to_list)
         print('Stopped')
 
+    def find_some_potatoes_with_while(self):
+        @gen.coroutine
+        def find_with_while():
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            print('Should print this line before while')
+            while (yield cursor.has_next()):
+                potato = cursor.get_next()
+                print('> {}'.format(potato))
+            print('Should print this line after while')
+
+        self.ioloop.run_sync(find_with_while)
+        print('Stopped')
+
     def update_potatoes(self):
         """ Update example.
         """
@@ -324,6 +343,7 @@ if __name__ == '__main__':
     # hello.find_some_potatoes()
     # hello.find_some_potatoes_with_generator()
     # hello.find_some_potatoes_with_yield_from()
-    hello.find_some_potatoes_to_list()
+    # hello.find_some_potatoes_to_list()
+    hello.find_some_potatoes_with_while()
     # hello.update_potatoes()
     # hello.remove_potatoes()
