@@ -31,6 +31,15 @@ class SmartCursor(collections.Iterable):
         """
         return getattr(self.motor_cursor, name)
 
+    def __getitem__(self, item):
+        """ Proxies the index or slice to the MotorCursor.
+
+        :param item: may be an integer value or a slice (e.g.: "2:4")
+        :return: self
+        """
+        self.motor_cursor[item]  # will internally change cursor's state - no need to assign it to something
+        return self
+
     def _post_process(self, document):
         if document is not None:
             for method in self.map_chain:
@@ -91,11 +100,15 @@ class SmartCursor(collections.Iterable):
 
     @gen.coroutine
     def to_list(self, length=None, callback=None):
-        """ MotorCursor.to_list() requires you to pass length even if you want to pass None. This proxy method just
+        """ Expose MotorCursor.to_list(), but using post-processing capabilities for each document retrieved.
+
+            MotorCursor.to_list() requires you to pass length even if you want to pass None. This proxy method also
             sets length to None by default, so you may call cursor.to_list() instead of cursor.to_list(None).
         """
         documents = yield self.motor_cursor.to_list(length=length, callback=callback)
-        return (self._post_process(doc) for doc in documents)
+        if len(self.map_chain) > 0:
+            documents = list(self._post_process(doc) for doc in documents)
+        return documents
 
     def map(self, method):
         self.map_chain.append(method)
@@ -419,6 +432,36 @@ class HelloMotor():
         self.ioloop.run_sync(copy)
         print('Stopped')
 
+    def test_limit(self):
+
+        @gen.coroutine
+        def limit():
+            # First approach: use limit()
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}).skip(1).limit(1))
+            documents = yield cursor.to_list()
+            for doc in documents:
+                print(doc)
+
+            # Second approach: use MotorCursor subscriptable property
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))[1]
+            documents = yield cursor.to_list()
+            for doc in documents:
+                print(doc)
+
+            # Third approach: consume it entirely and then fetch the desired index
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))
+            documents = yield cursor.to_list()
+            if len(documents) >= 2:
+                print(documents[1])
+
+            # Test with get_next()
+            cursor = SmartCursor(self.db.potato.find({'number': {'$gt': 8}}))[1]
+            if (yield cursor.has_next()):
+                print(cursor.get_next())
+
+        self.ioloop.run_sync(limit)
+        print('Stopped')
+
 
 def get_testable_methods(obj):
     for m in (m for m in dir(obj) if callable(getattr(obj, m)) and m.startswith('test')):
@@ -434,4 +477,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_database_copy()
+    HelloMotor().test_limit()
