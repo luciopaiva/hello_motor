@@ -383,6 +383,42 @@ class HelloMotor():
         self.ioloop.run_sync(remove)
         print('Stopped')
 
+    def test_database_copy(self):
+
+        @gen.coroutine
+        def copy():
+            org_db = 'motor_test'
+            temp_db = 'motor_test_copy'
+
+            # drop temp db if it exists:
+            dbs = yield self.client.database_names()
+            if temp_db in dbs:
+                yield self.client.drop_database(temp_db)
+
+            print('Databases found before copy: [{}]'.format(', '.join(dbs)))
+
+            yield self.client.copy_database(from_name=org_db, to_name=temp_db)
+
+            dbs = yield self.client.database_names()
+
+            print('Databases found after copy: [{}]'.format(', '.join(dbs)))
+
+            if temp_db in dbs:
+                print("Database '{}' was created successfully. Now I'm gonna drop it.".format(temp_db))
+                yield self.client.drop_database(temp_db)
+
+                dbs = yield self.client.database_names()
+
+                if temp_db in dbs:
+                    print('Database was not dropped.')
+                else:
+                    print('Database dropped succssefully')
+            else:
+                print('Database "{}" not found'.format(temp_db))
+
+        self.ioloop.run_sync(copy)
+        print('Stopped')
+
 
 def get_testable_methods(obj):
     for m in (m for m in dir(obj) if callable(getattr(obj, m)) and m.startswith('test')):
@@ -398,4 +434,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_find_some_potatoes_with_count_before()
+    HelloMotor().test_database_copy()
