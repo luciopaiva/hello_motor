@@ -274,6 +274,29 @@ class HelloMotor():
         self.ioloop.run_sync(find_with_gen)
         print('Stopped')
 
+    def test_find_some_potatoes_with_yield_from_and_yield_inside(self):
+        @gen.coroutine
+        def find_with_yield_from():
+            @gen.coroutine
+            def on_document(potato):
+                """
+                Doesn't work as expected!
+                Tornado will call send() on the SmartCursor, which will then invoke our callback function
+                on_document, but send() is not called as a @coroutine, so it is not possible to yield a Future from
+                inside our callback!
+
+                The insert below will never get executed in this example.
+                """
+                yield self.db.potato_copies.insert({'potato_copy': potato.number})
+                print('> {}'.format(potato))
+
+            print('Should print this line before yielding')
+            yield from SmartCursor(self.db.potato.find({'number': {'$gt': 80}}), on_document)
+            print('Should print this line after yielding')
+
+        self.ioloop.run_sync(find_with_yield_from)
+        print('Stopped')
+
     def test_find_some_potatoes_with_yield_from(self):
         @gen.coroutine
         def find_with_yield_from():
@@ -477,4 +500,4 @@ def test_all(obj):
 
 if __name__ == '__main__':
     # test_all(HelloMotor())
-    HelloMotor().test_limit()
+    HelloMotor().test_find_some_potatoes_with_yield_from_and_yield_inside()
